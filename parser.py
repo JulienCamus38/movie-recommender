@@ -4,6 +4,7 @@ Created on Mon Jan 29 16:12:50 2018
 
 @author: camusj
 """
+
 try:
     import sys
     import numpy as np
@@ -11,6 +12,65 @@ try:
     np.random.seed(0)
 except ImportError:
     raise ImportError('sys, numpy and pandas modules need to be imported.')
+    
+def create_dict_users(ratings):
+    """
+    """
+    
+    # Initialization
+    dict_users = dict()
+    fname = './ml-latest-small/ratings.csv'
+    
+    # Try/catch if file exists or not
+    try:
+        f = open(fname, 'r')
+    except IOError:
+        print("Could not read file: " + fname)
+        sys.exit()
+    
+    with f:
+        names = ['userId', 'movieId', 'rating', 'timestamp']
+        df = pd.read_csv(f, names=names, skiprows=1)
+        
+        for row in df.itertuples():
+            key = int(row[0])
+            if key in dict_users.keys():
+                dict_users[key].append(row[1:3])
+            else:
+                dict_users[key] = [row[1:3]]
+    
+    return dict_users
+
+def create_dict_indexes(ratings):
+    """
+    """
+    
+    # Initialization
+    dict_indexes = dict()
+    fname = './ml-latest-small/ratings.csv'
+    key = 0
+    
+    # Try/catch if file exists or not
+    try:
+        f = open(fname, 'r')
+    except IOError:
+        print("Could not read file: " + fname)
+        sys.exit()
+    
+    with f:
+        names = ['userId', 'movieId', 'rating', 'timestamp']
+        df = pd.read_csv(f, names=names, skiprows=1)
+        
+        for row in df.itertuples():
+            value = int(row[1])
+            if value not in dict_indexes.values():
+                dict_indexes[key] = value
+                ++key
+                
+    return dict_indexes
+    
+def get_length_dict_users(dict_users, i):
+    return len(dict_users[i])
 
 # Parse the csv file and create the array of ratings: [[userId, movieId, rating]]
 def parse_csv(fname='./ml-latest-small/ratings.csv'):
@@ -38,6 +98,8 @@ def parse_csv(fname='./ml-latest-small/ratings.csv'):
         
         # Initialize the ratings array
         ratings = np.zeros((nb_users, nb_movies))
+        
+        # Filling
         for row in df.itertuples():
             ratings[int(row[1])-1, int(row[2])-1] = float(row[3])
         
@@ -82,12 +144,3 @@ def train_test_split(ratings):
     assert(np.all((train * test) == 0))
     
     return train, test
-    
-# Main function (in order to test our implementation)
-if __name__ == '__main__':
-    
-    # Parse the CSV file into a list of dictionaries
-    ratings = parse_csv()
-    
-    # Split into a train and a test arrays
-    train, test = train_test_split(ratings)
