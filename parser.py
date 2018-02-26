@@ -7,140 +7,135 @@ Created on Mon Jan 29 16:12:50 2018
 
 try:
     import sys
+except ImportError:
+    raise ImportError('sys module needs to be imported.')
+    
+try:
     import numpy as np
-    import pandas as pd
     np.random.seed(0)
 except ImportError:
-    raise ImportError('sys, numpy and pandas modules need to be imported.')
+    raise ImportError('numpy module needs to be imported.')
     
-def create_dict_users(ratings):
-    """
-    """
+try:
+    import pandas as pd
+except ImportError:
+    raise ImportError('pandas module needs to be imported.')
     
-    # Initialization
-    dict_users = dict()
-    fname = './ml-latest-small/ratings.csv'
+try:
+    import math
+except ImportError:
+    raise ImportError('math module needs to be imported.')
     
-    # Try/catch if file exists or not
-    try:
-        f = open(fname, 'r')
-    except IOError:
-        print("Could not read file: " + fname)
-        sys.exit()
-    
-    with f:
-        names = ['userId', 'movieId', 'rating', 'timestamp']
-        df = pd.read_csv(f, names=names, skiprows=1)
+class parser():
+    def __init__(self,
+                 fname='./data/ml-latest-small/ratings.csv',
+                 dict_users=dict(),
+                 dict_indexes=dict(),
+                 nb_users=0,
+                 nb_items=0,
+                 ratings=np.zeros((0, 0)),
+                 sparsity=0.0):
+        """
+        """
         
-        for row in df.itertuples():
-            key = int(row[0])
-            if key in dict_users.keys():
-                dict_users[key].append(row[1:3])
-            else:
-                dict_users[key] = [row[1:3]]
-    
-    return dict_users
-
-def create_dict_indexes(ratings):
-    """
-    """
-    
-    # Initialization
-    dict_indexes = dict()
-    fname = './ml-latest-small/ratings.csv'
-    key = 0
-    
-    # Try/catch if file exists or not
-    try:
-        f = open(fname, 'r')
-    except IOError:
-        print("Could not read file: " + fname)
-        sys.exit()
-    
-    with f:
-        names = ['userId', 'movieId', 'rating', 'timestamp']
-        df = pd.read_csv(f, names=names, skiprows=1)
+        self.fname = fname
+        self.dict_users = dict_users
+        self.dict_indexes = dict_indexes
+        self.nb_users = nb_users
+        self.nb_items = nb_items
+        self.ratings = ratings
+        self.sparsity = sparsity
         
-        for row in df.itertuples():
-            value = int(row[1])
-            if value not in dict_indexes.values():
-                dict_indexes[key] = value
-                ++key
+    def parse_csv(self):
+        """
+        Parse a csv file into an array of [userId, movieId, rating].
+        Fill dict_users with {userId: movieId}.
+        Fill dict_indexes with {newMovieIdFromZero: movieId}.
+        """
+        
+        # Try/catch if file exists or not
+        try:
+            f = open(self.fname, 'r')
+        except IOError:
+            print("Could not read file: " + self.fname)
+            sys.exit()
+        
+        with f:
+            names = ['userId', 'movieId', 'rating', 'timestamp']
+            df = pd.read_csv(f, names=names, skiprows=1)
+            
+            # Compute the number of users and the number of movies
+            self.nb_users = df.userId.unique().shape[0]
+            self.nb_items = df.movieId.unique().shape[0]
+            
+            # Initialization
+            self.ratings = np.zeros((self.nb_users, self.nb_items))
+            new_movieId = 0
+            
+            # Filling
+            for row in df.itertuples():
                 
-    return dict_indexes
-    
-def get_length_dict_users(dict_users, i):
-    return len(dict_users[i])
-
-# Parse the csv file and create the array of ratings: [[userId, movieId, rating]]
-def parse_csv(fname='./ml-latest-small/ratings.csv'):
-    """
-    Parse a csv file into an array of [userId, movieId, rating].
-    
-    Argument:
-    - fname: path of the csv file to parse
-    """
-    
-    # Try/catch if file exists or not
-    try:
-        f = open(fname, 'r')
-    except IOError:
-        print("Could not read file: " + fname)
-        sys.exit()
-    
-    with f:
-        names = ['userId', 'movieId', 'rating', 'timestamp']
-        df = pd.read_csv(f, names=names, skiprows=1)
+                # dict_indexes
+                movieId = int(row[2])
+                if movieId not in self.dict_indexes.keys():
+                    self.dict_indexes[movieId] = new_movieId
+                    new_movieId += 1
+                    
+                # dict_users
+                userId = int(row[1])
+                if userId in self.dict_users.keys():
+                    self.dict_users[userId].append(row[2:4])
+                else:
+                    self.dict_users[userId] = [row[2:4]]
+                
+                # ratings
+                self.ratings[userId-1, self.dict_indexes[movieId]] = float(row[3])
+            
+            # Compute the sparsity
+            self.sparsity = float(len(self.ratings.nonzero()[0]))
+            self.sparsity /= (self.ratings.shape[0] * self.ratings.shape[1])
+            self.sparsity *= 100
+            
+            # Print information
+            sep = '================================================\n'
+            print(sep + 'df.head()')
+            print(df.head())
+            print(sep + 'Number of users = ' + str(self.nb_users))
+            print(sep + 'Number of movies = ' + str(self.nb_items))
+            print(sep + 'Sparsity = {:4.2f}%'.format(self.sparsity))
+            print(sep + 'ratings')
+            print(self.ratings)
         
-        # Compute the number of users and the number of movies
-        nb_users = df.userId.unique().shape[0]
-        nb_movies = df.movieId.max()
+    def get_length_dict_users(self, user):
+        return len(self.dict_users[user])
+            
+    def train_test_split(self):
+        """
+        Split the ratings array in a train array and a test array.
         
-        # Initialize the ratings array
-        ratings = np.zeros((nb_users, nb_movies))
+        Argument:
+        - ratings: Array containing the ratings parsed from the csv file.
+        """
+        
+        # Initialization
+        test = np.zeros(self.ratings.shape)
+        train = self.ratings.copy()
         
         # Filling
-        for row in df.itertuples():
-            ratings[int(row[1])-1, int(row[2])-1] = float(row[3])
+        for user in range(1, self.ratings.shape[0]+1):
+            # Length of userId subarray
+            length_user_dict = self.get_length_dict_users(user)
+            
+            # Number of values in train and test subarrays
+            nb_user_test_values = math.floor(0.3*length_user_dict)
+            
+            test_ratings = np.random.choice(self.ratings[user-1, :].nonzero()[0], 
+                                            size=nb_user_test_values,
+                                            replace=False)
+            train[user-1, test_ratings] = 0.0
+            test[user-1, test_ratings] = self.ratings[user-1, test_ratings]
+            
+        # Test and training are truly disjoint
+        assert(np.all((train * test) == 0))
         
-        # Compute the sparsity
-        sparsity = float(len(ratings.nonzero()[0]))
-        sparsity /= (ratings.shape[0] * ratings.shape[1])
-        sparsity *= 100
-        
-        # Print information
-        print('df')
-        df.head()
-        print('Number of users = ' + str(nb_users))
-        print('Number of movies = ' + str(nb_movies))
-        print('Sparsity = {:4.2f}%'.format(sparsity))
-        print('ratings')
-        print(ratings)
-        
-        return ratings
-        
-def train_test_split(ratings):
-    """
-    Split the ratings array in a train array and a test array.
-    
-    Argument:
-    - ratings: Array containing the ratings parsed from the csv file.
-    """
-    
-    # Initialization
-    test = np.zeros(ratings.shape)
-    train = ratings.copy()
-    
-    # Filling
-    for user in range(ratings.shape[0]):
-        # TODO: modify size=10 by 70%/30%
-        test_ratings = np.random.choice(ratings[user, :].nonzero()[0], 
-                                        size=10, 
-                                        replace=False)
-        train[user, test_ratings] = 0.0
-        test[user, test_ratings] = ratings[user, test_ratings]
-        
-    # Test and training are truly disjoint
-    assert(np.all((train * test) == 0))
-    
-    return train, test
+        return train, test
