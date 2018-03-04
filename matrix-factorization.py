@@ -290,8 +290,8 @@ class mf():
         
         # Initialization
         iter_array.sort()
-        self.train_mae = []
-        self.test_mae = []
+        self.train_mse = []
+        self.test_mse = []
         iter_diff = 0
         
         # Loop over iterations
@@ -299,7 +299,7 @@ class mf():
             
             # Print some information about the iterations
             if self._v:
-                print('Iterations: {}'.format(nb_iter))
+                print('Number of iterations: {}'.format(nb_iter))
                 
             # Training process
             if i == 0:
