@@ -13,7 +13,7 @@ except ImportError:
     raise ImportError('numpy module needs to be imported.')
     
 try:
-    from sklearn.metrics import mean_absolute_error
+    from sklearn.metrics import mean_absolute_error, mean_squared_error
 except ImportError:
     raise ImportError('sklearn.metrics module needs to be imported.')
                       
@@ -38,16 +38,57 @@ try:
 except ImportError:
     raise ImportError('pandas module needs to be imported.')
 
+
 def get_mae(pred, actual):
-    """ Mean squared error between predicted and actual arrays."""
+    """
+    Mean absolute error between predicted and actual arrays
+    
+    Arguments
+    =========
+    - pred : (ndarray)
+        Array of predicted values
+        
+    - actual : (ndarray)
+        Array of actual values
+    """
     
     # Ignore nonzero terms
     pred = pred[actual.nonzero()].flatten()
     actual = actual[actual.nonzero()].flatten()
     return mean_absolute_error(pred, actual)
+    
+    
+def get_mse(pred, actual):
+    """
+    Mean squared error between predicted and actual arrays
+    
+    Arguments
+    =========
+    - pred : (ndarray)
+        Array of predicted values
+        
+    - actual : (ndarray)
+        Array of actual values    
+    """
+    
+    # Ignore nonzero terms
+    pred = pred[actual.nonzero()].flatten()
+    actual = actual[actual.nonzero()].flatten()
+    return mean_squared_error(pred, actual)
+    
 
 def plot_learning_curve(iter_array, model):
-    """ Learning curve of the model regarding the number of iterations. """
+    """
+    Learning curve of the model regarding the number of iterations
+    
+    Arguments
+    =========
+    - iter_array : (ndarray)
+        Array of number of iterations
+    
+    - model : (dict)
+        Dictionary with parameters representing the model
+    """
     
     plt.plot(iter_array, model.train_mae, label='Training', linewidth=5)
     plt.plot(iter_array, model.test_mae, label='Testing', linewidth=5)
@@ -56,9 +97,10 @@ def plot_learning_curve(iter_array, model):
     plt.yticks(fontsize=16);
     
     plt.xlabel('Iterations', fontsize=25);
-    plt.ylabel('MAE', fontsize=25);
+    plt.ylabel('MSE', fontsize=25);
     
     plt.legend(loc='best', fontsize=15);
+    
 
 class mf():
     def __init__(self, 
@@ -74,28 +116,28 @@ class mf():
         entries in a matrix. The terminology assumes a 
         ratings matrix which is ~ user x item
         
-        Params
-        ======
-        ratings : (ndarray)
+        Arguments
+        =========
+        - ratings : (ndarray)
             User x Item matrix with corresponding ratings
         
-        K : (int)
+        - K : (int)
             Number of latent factors to use in matrix 
             factorization model
         
-        item_fact_reg : (float)
+        - item_fact_reg : (float)
             Regularization term for item latent factors
         
-        user_fact_reg : (float)
+        - user_fact_reg : (float)
             Regularization term for user latent factors
             
-        item_bias_reg : (float)
+        - item_bias_reg : (float)
             Regularization term for item biases
         
-        user_bias_reg : (float)
+        - user_bias_reg : (float)
             Regularization term for user biases
         
-        verbose : (bool)
+        - verbose : (bool)
             Whether or not to printout training progress
         """
         
@@ -111,14 +153,24 @@ class mf():
         self._v = verbose
 
 
-    def train(self, nb_iter=10, learning_rate=0.001):
-        """ Train model for nb_iter iterations from scratch."""
+    def train(self, nb_iter=1e2, eta=1e-3):
+        """
+        Train model for nb_iter iterations from scratch
+        
+        Arguments
+        =========
+        - nb_iter : (int)
+            Number of iterations for training the model
+            
+        - eta : (float)
+            Learning rate
+        """
         
         # Initialize latent vectors        
-        self.user_vecs = np.random.normal(scale=1./self.K, size=(self.nb_users, self.K))
-        self.item_vecs = np.random.normal(scale=1./self.K, size=(self.nb_items, self.K))
+        self.U = np.random.normal(scale=1./self.K, size=(self.nb_users, self.K))
+        self.V = np.random.normal(scale=1./self.K, size=(self.nb_items, self.K))
         
-        self.learning_rate = learning_rate
+        self.eta = eta
         self.user_bias = np.zeros(self.nb_users)
         self.item_bias = np.zeros(self.nb_items)
         self.global_bias = np.mean(self.ratings[np.where(self.ratings != 0)])
@@ -128,81 +180,112 @@ class mf():
     def partial_train(self, nb_iter):
         """ 
         Train model for nb_iter iterations. Can be 
-        called multiple times for further training.
+        called multiple times for further training
+        
+        Arguments
+        =========
+        - nb_iter : (int)
+            Number of iterations for training the model
         """
         
-        # Initialization
-        ctr = 1
-        
-        while ctr <= nb_iter:
-            if ctr % 10 == 0 and self._v:
-                print('\tcurrent iteration: {}'.format(ctr))
-                
+        # Loop over the iterations
+        for it in range(1, nb_iter+1):
+            
+            # Print some information about the current iteration
+            if it % 10 == 0 and self._v:
+                print('\tCurrent iteration: {}'.format(it))
+              
+            # Perform SGD algorithm
             self.training_indices = np.arange(self.nb_samples)
             np.random.shuffle(self.training_indices)
             self.sgd()
-            ctr += 1
-
+            
 
     def sgd(self):
-        """ Stochastic gradient descent algorithm."""        
+        """ Stochastic gradient descent algorithm """
         
         for idx in self.training_indices:
             u = self.sample_row[idx]
             i = self.sample_col[idx]
+            
+            # Prediction
             prediction = self.predict(u, i)
-            e = (self.ratings[u, i] - prediction) # error
+            
+            # Error
+            e = (self.ratings[u, i] - prediction)
             
             # Update biases
-            self.user_bias[u] += self.learning_rate * (e - self.user_bias_reg * self.user_bias[u])
+            self.user_bias[u] += self.eta * (e - self.user_bias_reg * self.user_bias[u])
             if np.isnan(self.user_bias[u]):
                 self.user_bias[u] = 0.0
-            self.item_bias[i] += self.learning_rate * (e - self.item_bias_reg * self.item_bias[i])
+                
+            self.item_bias[i] += self.eta * (e - self.item_bias_reg * self.item_bias[i])
             if np.isnan(self.item_bias[i]):
                 self.item_bias[i] = 0.0
             
-            #Update latent factors
-            self.user_vecs[u, :] += self.learning_rate * (e * self.item_vecs[i, :] - self.user_fact_reg * self.user_vecs[u,:])
-            self.item_vecs[i, :] += self.learning_rate * (e * self.user_vecs[u, :] - self.item_fact_reg * self.item_vecs[i,:])
+            # Update latent factors
+            self.U[u, :] += self.eta * (e * self.V[i, :] - self.user_fact_reg * self.U[u,:])
+            self.V[i, :] += self.eta * (e * self.U[u, :] - self.item_fact_reg * self.V[i,:])
                
                       
     def predict(self, u, i):
-        """ Single user and item prediction."""
+        """
+        Single user and item prediction
+
+        Arguments
+        =========
+        - u : (int)
+            User considered for the prediction
+            
+        - i : (int)
+            Item considered for the prediction
+        """
         
         prediction = self.global_bias + self.user_bias[u] + self.item_bias[i]
-        prediction += self.user_vecs[u, :].dot(self.item_vecs[i, :].T)
+        prediction += self.U[u, :].dot(self.V[i, :].T)
         return prediction
     
     
     def predict_all(self):
-        """ Predict ratings for every user and item."""
+        """ Predict ratings for every user and item """
         
-        predictions = np.zeros((self.user_vecs.shape[0], self.item_vecs.shape[0]))
-        for u in range(self.user_vecs.shape[0]):
-            for i in range(self.item_vecs.shape[0]):
+        # Initialization
+        predictions = np.zeros((self.U.shape[0], self.V.shape[0]))
+        
+        # Loop over users
+        for u in range(self.U.shape[0]):
+            # Loop over items
+            for i in range(self.V.shape[0]):
                 predictions[u, i] = self.predict(u, i)
                 
         return predictions
     
     
-    def calculate_learning_curve(self, iter_array, test, learning_rate=0.1):
+    def calculate_learning_curve(self, iter_array, test, eta=1e-3):
         """
-        Keep track of mae as a function of training iterations.
+        Keep track of mse as a function of training iterations
         
-        Params
-        ======
-        iter_array : (list)
+        Arguments
+        =========
+        - iter_array : (list)
             List of numbers of iterations to train for each step of 
             the learning curve. e.g. [1, 5, 10, 20]
-        test : (2D ndarray)
-            Testing dataset (assumed to be user x item).
+            
+        - test : (2D ndarray)
+            Testing dataset (assumed to be user x item)
+            
+        - eta : (float)
+            Learning rate
         
+        Output
+        ======
         The function creates two new class attributes:
         
-        train_mae : (list)
-            Training data mae values for each value of iter_array
-        test_mae : (list)
-            Test data mae values for each value of iter_array
+        - train_mse : (list)
+            Training data mse values for each value of iter_array
+            
+        - test_mse : (list)
+            Test data mse values for each value of iter_array
         """
         
         # Initialization
@@ -211,21 +294,32 @@ class mf():
         self.test_mae = []
         iter_diff = 0
         
+        # Loop over iterations
         for (i, nb_iter) in enumerate(iter_array):
+            
+            # Print some information about the iterations
             if self._v:
                 print('Iterations: {}'.format(nb_iter))
+                
+            # Training process
             if i == 0:
-                self.train(nb_iter - iter_diff, learning_rate)
+                self.train(nb_iter - iter_diff, eta)
             else:
                 self.partial_train(nb_iter - iter_diff)
 
+            # Predictions
             predictions = self.predict_all()
 
-            self.train_mae += [get_mae(predictions, self.ratings)]
-            self.test_mae += [get_mae(predictions, test)]
+            # Update train and test mse
+            self.train_mse += [get_mse(predictions, self.ratings)]
+            self.test_mse += [get_mse(predictions, test)]
+            
+            # Print some information about the mse
             if self._v:
-                print('Train mae: ' + str(self.train_mae[-1]))
-                print('Test mae: ' + str(self.test_mae[-1]))
+                print('Train mse: ' + str(self.train_mse[-1]))
+                print('Test mse: ' + str(self.test_mse[-1]))
+                
+            # Update iter_diff
             iter_diff = nb_iter
            
            
@@ -241,51 +335,51 @@ if __name__ == '__main__':
     
     # Find the optimal hyperparameters
 #    iter_array = [1, 2, 5, 10, 25, 50, 100, 200]
-#    learning_rates = [1e-5, 1e-4, 1e-3, 1e-2]
+#    etas = [1e-5, 1e-4, 1e-3, 1e-2]
 #    
 #    best_params = {}
-#    best_params['learning_rate'] = None
+#    best_params['eta'] = None
 #    best_params['nb_iter'] = 0
 #    best_params['train_mae'] = np.inf
 #    best_params['test_mae'] = np.inf
 #    best_params['model'] = None
 #    
-#    for rate in learning_rates:
-#        print('Rate: {}'.format(rate))
+#    for eta in etas:
+#        print('Learning rate (eta): {}'.format(eta))
 #        mf = mf(train, K=5)
-#        mf.calculate_learning_curve(iter_array, test, learning_rate=rate)
+#        mf.calculate_learning_curve(iter_array, test, eta=eta)
 #        min_idx = np.argmin(mf.test_mae)
 #        if mf.test_mae[min_idx] < best_params['test_mae']:
 #            best_params['nb_iter'] = iter_array[min_idx]
-#            best_params['learning_rate'] = rate
+#            best_params['eta'] = eta
 #            best_params['train_mae'] = mf.train_mae[min_idx]
 #            best_params['test_mae'] = mf.test_mae[min_idx]
 #            best_params['model'] = mf
 #            print('New optimal hyperparameters')
 #            print(pd.Series(best_params))
 #            
-#    latent_factors = [5, 10, 20, 40, 80]
-#    regularizations = [1e-3, 1e-2, 1e-1, 1, 1e1, 1e2, 1e3]
-#    regularizations.sort()
+#    K_array = [5, 10, 20, 40, 80]
+#    lmbdas = [1e-3, 1e-2, 1e-1, 1, 1e1, 1e2, 1e3]
+#    lmbdas.sort()
 #    
 #    best_params = {}
-#    best_params['K'] = latent_factors[0]
-#    best_params['reg'] = regularizations[0]
+#    best_params['K'] = K_array[0]
+#    best_params['lambda'] = lmbdas[0]
 #    best_params['nb_iter'] = 0
 #    best_params['train_mae'] = np.inf
 #    best_params['test_mae'] = np.inf
 #    best_params['model'] = None
 #    
-#    for factors in latent_factors:
-#        print('Number of latent factors: {}'.format(factors))
-#        for reg in regularizations:
-#            print('Regularization: {}'.format(reg))
-#            res = mf(train, K=factors, user_fact_reg=reg, item_fact_reg=reg, user_bias_reg=reg, item_bias_reg=reg)
-#            res.calculate_learning_curve(iter_array, test, learning_rate=1e-3)
+#    for K in K_array:
+#        print('Number of latent factors (K): {}'.format(K))
+#        for lmbda in lmbdas:
+#            print('Regularization parameter (lambda): {}'.format(lmbda))
+#            res = mf(train, K=K, user_fact_reg=lmbda, item_fact_reg=lmbda, user_bias_reg=lmbda, item_bias_reg=lmbda)
+#            res.calculate_learning_curve(iter_array, test, eta=1e-3)
 #            min_idx = np.argmin(res.test_mae)
 #            if res.test_mae[min_idx] < best_params['test_mae']:
-#                best_params['K'] = factors
-#                best_params['reg'] = reg
+#                best_params['K'] = K
+#                best_params['lambda'] = lmbda
 #                best_params['nb_iter'] = iter_array[min_idx]
 #                best_params['train_mae'] = res.train_mae[min_idx]
 #                best_params['test_mae'] = res.test_mae[min_idx]
@@ -297,11 +391,11 @@ if __name__ == '__main__':
 #    plot_learning_curve(iter_array, best_params['model'])
 #    
 #    # Print information
-#    print('Best regularization: {}'.format(best_params['reg']))
-#    print('Best latent factors: {}'.format(best_params['K']))
+#    print('Best regularization (lambda): {}'.format(best_params['lambda']))
+#    print('Best latent factors (K): {}'.format(best_params['K']))
 #    print('Best iterations: {}'.format(best_params['nb_iter']))
     
-    reg = 1e-2
-    iter_array = [200]
-    res = mf(train, K=2, user_fact_reg=reg, item_fact_reg=reg, user_bias_reg=reg, item_bias_reg=reg, verbose=True)
-    res.calculate_learning_curve(iter_array, test, learning_rate=1e-3)
+    lmbda = 5e-2
+    iter_array = [75]
+    res = mf(train, K=10, user_fact_reg=lmbda, item_fact_reg=lmbda, user_bias_reg=lmbda, item_bias_reg=lmbda, verbose=True)
+    res.calculate_learning_curve(iter_array, test, eta=5e-3)

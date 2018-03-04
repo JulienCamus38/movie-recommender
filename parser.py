@@ -36,6 +36,32 @@ class parser():
                  ratings=np.zeros((0, 0)),
                  sparsity=0.0):
         """
+        Parse a csv file and fill some useful objects  
+        
+        Arguments
+        =========
+        - fname : (string)
+            Path of the csv file to parse        
+        
+        - dict_users : (dict)
+            Dictionary representing {userId: (movieId, rating), ...}
+    
+        - dict_indexes : (dict)
+            Dictionary representing {movieId: new_movieId}
+            where new_movieId start from 0 and is incremented 1 by 1.
+
+        - nb_users : (int)
+            Number of users
+
+        - nb_items : (int)
+            Number of items (movies)
+        
+        - ratings : (ndarray)
+            Array containing the ratings parsed from the csv file
+            
+        - sparsity : (float)
+            Sparsity of the array, represents the number of 0 in the 
+            ratings matrix
         """
         
         self.fname = fname
@@ -48,9 +74,12 @@ class parser():
         
     def parse_csv(self):
         """
-        Parse a csv file into an array of [userId, movieId, rating].
-        Fill dict_users with {userId: movieId}.
-        Fill dict_indexes with {newMovieIdFromZero: movieId}.
+        Parse a csv file into an array of [userId, movieId, rating]
+        
+        Output
+        ======
+        - Fill dict_users with {userId: movieId}
+        - Fill dict_indexes with {newMovieIdFromZero: movieId}
         """
         
         # Try/catch if file exists or not
@@ -107,15 +136,19 @@ class parser():
             print(self.ratings)
         
     def get_length_dict_users(self, user):
+        """
+        Get the number of existing ratings by a user
+        
+        Arguments
+        =========
+        - user : (int)
+            User for which the ratings are counted
+        """
+        
         return len(self.dict_users[user])
             
     def train_test_split(self):
-        """
-        Split the ratings array in a train array and a test array.
-        
-        Argument:
-        - ratings: Array containing the ratings parsed from the csv file.
-        """
+        """ Split the ratings array in a train array and a test array """
         
         # Initialization
         test = np.zeros(self.ratings.shape)
@@ -126,7 +159,7 @@ class parser():
             # Length of userId subarray
             length_user_dict = self.get_length_dict_users(user)
             
-            # Number of values in train and test subarrays
+            # Number of values in train and test subarrays (70%/30%)
             nb_user_test_values = math.floor(0.3*length_user_dict)
             
             test_ratings = np.random.choice(self.ratings[user-1, :].nonzero()[0], 
