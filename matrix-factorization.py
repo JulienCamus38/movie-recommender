@@ -32,6 +32,11 @@ try:
     sns.set()
 except ImportError:
     raise ImportError('seaborn module needs to be imported.')
+    
+try:
+    import pandas as pd
+except ImportError:
+    raise ImportError('pandas module needs to be imported.')
 
 def get_mae(pred, actual):
     """ Mean squared error between predicted and actual arrays."""
@@ -234,10 +239,69 @@ if __name__ == '__main__':
     # Split into a train and a test arrays
     train, test = p.train_test_split()
     
-    # Compute
-    mf = mf(train, 5, verbose=True)
-    iter_array = [1, 2, 5, 10, 25, 50, 100, 200]
-    mf.calculate_learning_curve(iter_array, test, learning_rate=0.001)
+    # Find the optimal hyperparameters
+#    iter_array = [1, 2, 5, 10, 25, 50, 100, 200]
+#    learning_rates = [1e-5, 1e-4, 1e-3, 1e-2]
+#    
+#    best_params = {}
+#    best_params['learning_rate'] = None
+#    best_params['nb_iter'] = 0
+#    best_params['train_mae'] = np.inf
+#    best_params['test_mae'] = np.inf
+#    best_params['model'] = None
+#    
+#    for rate in learning_rates:
+#        print('Rate: {}'.format(rate))
+#        mf = mf(train, K=5)
+#        mf.calculate_learning_curve(iter_array, test, learning_rate=rate)
+#        min_idx = np.argmin(mf.test_mae)
+#        if mf.test_mae[min_idx] < best_params['test_mae']:
+#            best_params['nb_iter'] = iter_array[min_idx]
+#            best_params['learning_rate'] = rate
+#            best_params['train_mae'] = mf.train_mae[min_idx]
+#            best_params['test_mae'] = mf.test_mae[min_idx]
+#            best_params['model'] = mf
+#            print('New optimal hyperparameters')
+#            print(pd.Series(best_params))
+#            
+#    latent_factors = [5, 10, 20, 40, 80]
+#    regularizations = [1e-3, 1e-2, 1e-1, 1, 1e1, 1e2, 1e3]
+#    regularizations.sort()
+#    
+#    best_params = {}
+#    best_params['K'] = latent_factors[0]
+#    best_params['reg'] = regularizations[0]
+#    best_params['nb_iter'] = 0
+#    best_params['train_mae'] = np.inf
+#    best_params['test_mae'] = np.inf
+#    best_params['model'] = None
+#    
+#    for factors in latent_factors:
+#        print('Number of latent factors: {}'.format(factors))
+#        for reg in regularizations:
+#            print('Regularization: {}'.format(reg))
+#            res = mf(train, K=factors, user_fact_reg=reg, item_fact_reg=reg, user_bias_reg=reg, item_bias_reg=reg)
+#            res.calculate_learning_curve(iter_array, test, learning_rate=1e-3)
+#            min_idx = np.argmin(res.test_mae)
+#            if res.test_mae[min_idx] < best_params['test_mae']:
+#                best_params['K'] = factors
+#                best_params['reg'] = reg
+#                best_params['nb_iter'] = iter_array[min_idx]
+#                best_params['train_mae'] = res.train_mae[min_idx]
+#                best_params['test_mae'] = res.test_mae[min_idx]
+#                best_params['model'] = res
+#                print('New optimal hyperparameters')
+#                print(pd.Series(best_params))
+#    
+#    # Plot
+#    plot_learning_curve(iter_array, best_params['model'])
+#    
+#    # Print information
+#    print('Best regularization: {}'.format(best_params['reg']))
+#    print('Best latent factors: {}'.format(best_params['K']))
+#    print('Best iterations: {}'.format(best_params['nb_iter']))
     
-    # Plot
-    plot_learning_curve(iter_array, mf)
+    reg = 1e-2
+    iter_array = [200]
+    res = mf(train, K=2, user_fact_reg=reg, item_fact_reg=reg, user_bias_reg=reg, item_bias_reg=reg, verbose=True)
+    res.calculate_learning_curve(iter_array, test, learning_rate=1e-3)
