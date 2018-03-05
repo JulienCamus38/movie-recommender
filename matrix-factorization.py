@@ -90,8 +90,8 @@ def plot_learning_curve(iter_array, model):
         Dictionary with parameters representing the model
     """
     
-    plt.plot(iter_array, model.train_mae, label='Training', linewidth=5)
-    plt.plot(iter_array, model.test_mae, label='Testing', linewidth=5)
+    plt.plot(iter_array, model.train_mse, label='Training', linewidth=5)
+    plt.plot(iter_array, model.test_mse, label='Testing', linewidth=5)
 
     plt.xticks(fontsize=16);
     plt.yticks(fontsize=16);
@@ -106,10 +106,10 @@ class mf():
     def __init__(self, 
                  ratings,
                  K=5,
-                 item_fact_reg=0.0, 
-                 user_fact_reg=0.0,
-                 item_bias_reg=0.0,
-                 user_bias_reg=0.0,
+                 lmbdaV=0.0, 
+                 lmbdaU=0.0,
+                 lmbdaBV=0.0,
+                 lmbdaBU=0.0,
                  verbose=False):
         """
         Train a matrix factorization model to predict empty 
@@ -125,16 +125,16 @@ class mf():
             Number of latent factors to use in matrix 
             factorization model
         
-        - item_fact_reg : (float)
+        - lmbdaV : (float)
             Regularization term for item latent factors
         
-        - user_fact_reg : (float)
+        - lmbdaU : (float)
             Regularization term for user latent factors
             
-        - item_bias_reg : (float)
+        - lmbdaBV : (float)
             Regularization term for item biases
         
-        - user_bias_reg : (float)
+        - lmbdaBU : (float)
             Regularization term for user biases
         
         - verbose : (bool)
@@ -144,10 +144,10 @@ class mf():
         self.ratings = ratings
         self.nb_users, self.nb_items = ratings.shape
         self.K = K
-        self.item_fact_reg = item_fact_reg
-        self.user_fact_reg = user_fact_reg
-        self.item_bias_reg = item_bias_reg
-        self.user_bias_reg = user_bias_reg
+        self.lmbdaV = lmbdaV
+        self.lmbdaU = lmbdaU
+        self.lmbdaBV = lmbdaBV
+        self.lmbdaBU = lmbdaBU
         self.sample_row, self.sample_col = self.ratings.nonzero()
         self.nb_samples = len(self.sample_row)
         self._v = verbose
@@ -174,6 +174,9 @@ class mf():
         self.user_bias = np.zeros(self.nb_users)
         self.item_bias = np.zeros(self.nb_items)
         self.global_bias = np.mean(self.ratings[np.where(self.ratings != 0)])
+        if self._v:  
+            print('Global bias = {}'.format(self.global_bias))
+            
         self.partial_train(nb_iter)
     
     
@@ -215,17 +218,17 @@ class mf():
             e = (self.ratings[u, i] - prediction)
             
             # Update biases
-            self.user_bias[u] += self.eta * (e - self.user_bias_reg * self.user_bias[u])
+            self.user_bias[u] += self.eta * (e - self.lmbdaBU * self.user_bias[u])
             if np.isnan(self.user_bias[u]):
                 self.user_bias[u] = 0.0
                 
-            self.item_bias[i] += self.eta * (e - self.item_bias_reg * self.item_bias[i])
+            self.item_bias[i] += self.eta * (e - self.lmbdaBV * self.item_bias[i])
             if np.isnan(self.item_bias[i]):
                 self.item_bias[i] = 0.0
             
             # Update latent factors
-            self.U[u, :] += self.eta * (e * self.V[i, :] - self.user_fact_reg * self.U[u,:])
-            self.V[i, :] += self.eta * (e * self.U[u, :] - self.item_fact_reg * self.V[i,:])
+            self.U[u, :] += self.eta * (e * self.V[i, :] - self.lmbdaU * self.U[u,:])
+            self.V[i, :] += self.eta * (e * self.U[u, :] - self.lmbdaV * self.V[i,:])
                
                       
     def predict(self, u, i):
@@ -334,68 +337,66 @@ if __name__ == '__main__':
     train, test = p.train_test_split()
     
     # Find the optimal hyperparameters
-#    iter_array = [1, 2, 5, 10, 25, 50, 100, 200]
-#    etas = [1e-5, 1e-4, 1e-3, 1e-2]
-#    
-#    best_params = {}
-#    best_params['eta'] = None
-#    best_params['nb_iter'] = 0
-#    best_params['train_mae'] = np.inf
-#    best_params['test_mae'] = np.inf
-#    best_params['model'] = None
-#    
-#    for eta in etas:
-#        print('Learning rate (eta): {}'.format(eta))
-#        mf = mf(train, K=5)
-#        mf.calculate_learning_curve(iter_array, test, eta=eta)
-#        min_idx = np.argmin(mf.test_mae)
-#        if mf.test_mae[min_idx] < best_params['test_mae']:
-#            best_params['nb_iter'] = iter_array[min_idx]
-#            best_params['eta'] = eta
-#            best_params['train_mae'] = mf.train_mae[min_idx]
-#            best_params['test_mae'] = mf.test_mae[min_idx]
-#            best_params['model'] = mf
-#            print('New optimal hyperparameters')
-#            print(pd.Series(best_params))
-#            
-#    K_array = [5, 10, 20, 40, 80]
-#    lmbdas = [1e-3, 1e-2, 1e-1, 1, 1e1, 1e2, 1e3]
-#    lmbdas.sort()
-#    
-#    best_params = {}
-#    best_params['K'] = K_array[0]
-#    best_params['lambda'] = lmbdas[0]
-#    best_params['nb_iter'] = 0
-#    best_params['train_mae'] = np.inf
-#    best_params['test_mae'] = np.inf
-#    best_params['model'] = None
-#    
-#    for K in K_array:
-#        print('Number of latent factors (K): {}'.format(K))
-#        for lmbda in lmbdas:
-#            print('Regularization parameter (lambda): {}'.format(lmbda))
-#            res = mf(train, K=K, user_fact_reg=lmbda, item_fact_reg=lmbda, user_bias_reg=lmbda, item_bias_reg=lmbda)
-#            res.calculate_learning_curve(iter_array, test, eta=1e-3)
-#            min_idx = np.argmin(res.test_mae)
-#            if res.test_mae[min_idx] < best_params['test_mae']:
-#                best_params['K'] = K
-#                best_params['lambda'] = lmbda
-#                best_params['nb_iter'] = iter_array[min_idx]
-#                best_params['train_mae'] = res.train_mae[min_idx]
-#                best_params['test_mae'] = res.test_mae[min_idx]
-#                best_params['model'] = res
-#                print('New optimal hyperparameters')
-#                print(pd.Series(best_params))
-#    
-#    # Plot
-#    plot_learning_curve(iter_array, best_params['model'])
-#    
-#    # Print information
-#    print('Best regularization (lambda): {}'.format(best_params['lambda']))
-#    print('Best latent factors (K): {}'.format(best_params['K']))
-#    print('Best iterations: {}'.format(best_params['nb_iter']))
+    iter_array = [1, 2, 5, 10, 25, 50, 100, 200]
+    '''
+    etas = [1e-5, 1e-4, 1e-3, 1e-2]
     
-    lmbda = 5e-2
-    iter_array = [75]
-    res = mf(train, K=10, user_fact_reg=lmbda, item_fact_reg=lmbda, user_bias_reg=lmbda, item_bias_reg=lmbda, verbose=True)
-    res.calculate_learning_curve(iter_array, test, eta=5e-3)
+    best_params = {}
+    best_params['eta'] = None
+    best_params['nb_iter'] = 0
+    best_params['train_mse'] = np.inf
+    best_params['test_mse'] = np.inf
+    best_params['model'] = None
+    
+    for eta in etas:
+        print('Learning rate (eta): {}'.format(eta))
+        res = mf(train, K=5)
+        res.calculate_learning_curve(iter_array, test, eta=eta)
+        min_idx = np.argmin(res.test_mse)
+        if res.test_mse[min_idx] < best_params['test_mse']:
+            best_params['nb_iter'] = iter_array[min_idx]
+            best_params['eta'] = eta
+            best_params['train_mse'] = res.train_mse[min_idx]
+            best_params['test_mse'] = res.test_mse[min_idx]
+            best_params['model'] = res
+            print('New optimal hyperparameters')
+            print(pd.Series(best_params))
+    '''
+    eta = 1e-3        
+    K_array = [5, 10, 20, 40, 80]
+    lmbdas = [1e-3, 1e-2, 1e-1, 1, 1e1, 1e2, 1e3]
+    lmbdas.sort()
+    
+    best_params = {}
+    best_params['K'] = K_array[0]
+    best_params['lambda'] = lmbdas[0]
+    best_params['nb_iter'] = 0
+    best_params['train_mse'] = np.inf
+    best_params['test_mse'] = np.inf
+    best_params['model'] = None
+    
+    for K in K_array:
+        print('Number of latent factors (K): {}'.format(K))
+        for lmbda in lmbdas:
+            print('Regularization parameter (lambda): {}'.format(lmbda))
+            res = mf(train, K=K, lmbdaU=lmbda, lmbdaV=lmbda, lmbdaBU=lmbda, 
+                     lmbdaBV=lmbda)
+            res.calculate_learning_curve(iter_array, test, eta=eta)
+            min_idx = np.argmin(res.test_mse)
+            if res.test_mse[min_idx] < best_params['test_mse']:
+                best_params['K'] = K
+                best_params['lambda'] = lmbda
+                best_params['nb_iter'] = iter_array[min_idx]
+                best_params['train_mse'] = res.train_mse[min_idx]
+                best_params['test_mse'] = res.test_mse[min_idx]
+                best_params['model'] = res
+                print('New optimal hyperparameters')
+                print(pd.Series(best_params))
+    
+    # Plot
+    plot_learning_curve(iter_array, best_params['model'])
+    
+    # Print information
+    print('Best regularization (lambda): {}'.format(best_params['lambda']))
+    print('Best latent factors (K): {}'.format(best_params['K']))
+    print('Best iterations: {}'.format(best_params['nb_iter']))
